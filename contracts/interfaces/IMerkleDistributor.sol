@@ -7,11 +7,21 @@ interface IMerkleDistributor {
     function token() external view returns (address);
     // Returns the merkle root of the merkle tree containing account balances available to claim.
     function merkleRoot() external view returns (bytes32);
+    // Returns Terms and Conditions for claiming Ally tokens.
+    function termsAndConditions() external view returns (string memory);
     // Returns true if the index has been marked claimed.
     function isClaimed(uint256 index) external view returns (bool);
-    // Claim the given amount of the token to the given address. Reverts if the inputs are invalid.
-    function claim(uint256 index, address account, uint256 amount, bytes32[] calldata merkleProof) external;
+    // Returns true if the index has been marked T&Cs approved.
+    function isAgreedToTerms(uint256 index) external view returns (bool);
+    // Claim the given amount of the token to the given address. Reverts if the inputs are invalid or T&Cs not approved yet.
+    function claim(uint256 index, uint256 amount, bytes32[] calldata merkleProof) external;
+    // Approves T&Cs
+    function consentAndAgreeToTerms(uint256 index, uint256 amount, bytes32 terms, bytes32[] calldata merkleProof) external;
+    // Returns hash of user address and T&C
+    function termsHash(address account) external view returns (bytes32);
 
+    // This event is triggered whenever a call to #approveTerms succeeds.
+    event AgreedToTerms(uint256 index, address account, uint256 amount, bytes32 terms);
     // This event is triggered whenever a call to #claim succeeds.
     event Claimed(uint256 index, address account, uint256 amount);
 }
