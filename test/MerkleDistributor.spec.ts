@@ -2,6 +2,7 @@ import chai, { expect } from 'chai'
 import { solidity, MockProvider, deployContract } from 'ethereum-waffle'
 import { Contract, BigNumber, constants, utils } from 'ethers'
 import BalanceTree from '../src/balance-tree'
+//import { ethers, waffle, network } from 'hardhat'
 
 import Distributor from '../build/MerkleDistributor.json'
 import TestERC20 from '../build/TestERC20.json'
@@ -23,6 +24,7 @@ describe('MerkleDistributor', () => {
       gasLimit: 9999999,
     },
   })
+  //const provider = waffle.provider;
 
   const wallets = provider.getWallets()
   const [wallet0, wallet1] = wallets
@@ -133,7 +135,26 @@ describe('MerkleDistributor', () => {
           'MerkleDistributor: Invalid proof.'
         )
       })
-  
+
+      it('cannot approve terms more than once', async () => {
+        const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
+        let termsHash = await distributor.termsHash(wallet0.address);
+        await distributor.connect(wallet0).consentAndAgreeToTerms(0, 100, termsHash, proof0, overrides)
+
+        await expect(
+          distributor.connect(wallet0).consentAndAgreeToTerms(0, 100, termsHash, proof0, overrides)
+        ).to.be.revertedWith('MerkleDistributor: T&C already approved.')
+      })
+ 
+      it('cannot approve terms with wrong hash', async () => {
+        const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
+        let wrongHash = await distributor.termsHash(wallet1.address);
+
+        await expect(
+          distributor.connect(wallet0).consentAndAgreeToTerms(0, 100, wrongHash, proof0, overrides)
+        ).to.be.revertedWith('MerkleDistributor: wrong hash for T&C.')
+      })
+ 
     })
 
     describe('two account tree', () => {
