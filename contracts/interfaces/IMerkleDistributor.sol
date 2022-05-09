@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity >=0.5.0;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 // Allows anyone to claim a token if they exist in a merkle root.
 interface IMerkleDistributor {
     // Returns the address of the token distributed by this contract.
@@ -19,9 +21,13 @@ interface IMerkleDistributor {
     function consentAndAgreeToTerms(uint256 index, uint256 amount, bytes32 terms, bytes32[] calldata merkleProof) external;
     // Returns hash of user address and T&C
     function termsHash(address account) external view returns (bytes32);
+    // Owner may withdraw liquidity from this contract to recover errant tokens or cause an emergency stop.
+    function emergencyWithdraw(IERC20 _token, uint256 amount, address to) external;
 
     // This event is triggered whenever a call to #approveTerms succeeds.
     event AgreedToTerms(uint256 index, address account, uint256 amount, bytes32 terms);
     // This event is triggered whenever a call to #claim succeeds.
     event Claimed(uint256 index, address account, uint256 amount);
+    // This event is triggered whenever an emergency withdraw succeeds.
+    event EmergencyWithdrawal(IERC20 _token, uint256 amount, address to);
 }

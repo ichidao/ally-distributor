@@ -15,6 +15,7 @@ const overrides = {
 }
 
 const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000'
+const NULL_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 describe('MerkleDistributor', () => {
   const provider = new MockProvider({
@@ -81,6 +82,19 @@ describe('MerkleDistributor', () => {
       )
     })
 
+    it('fails for invalid amount', async () => {
+      const tree = new BalanceTree([
+        { account: wallet0.address, amount: BigNumber.from(100) },
+        { account: wallet1.address, amount: BigNumber.from(101) },
+      ])
+      const distributor = await deployContract(wallet0, Distributor, [token.address, tree.getHexRoot()], overrides)
+      const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
+      const termsHash = await distributor.termsHash(wallet0.address);
+      await expect(distributor.connect(wallet0).consentAndAgreeToTerms(0, BigNumber.from(200), termsHash, proof0)).to.be.revertedWith(
+        'MerkleDistributor: Invalid proof.'
+      )
+    })
+
     it('sets #isAgreedToTerms', async () => {
       const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
       let termsHash = await distributor.termsHash(wallet0.address);
@@ -106,6 +120,25 @@ describe('MerkleDistributor', () => {
         await token.setBalance(distributor.address, 201)
       })
 
+
+      it('emergency withdraw', async () => {
+        const { timestamp: now } = await provider.getBlock('latest')
+    
+        expect((await token.balanceOf(wallet0.address)).toString()).to.eq('0')
+    
+        // get all tokens out
+        const msg1 = "MerkleDistributor: to cannot be the 0x0 address";
+        const msg2 = "Ownable: caller is not the owner";
+    
+        await expect(distributor.emergencyWithdraw(token.address, 100, NULL_ADDRESS)).to.be.revertedWith(msg1);
+        await expect(distributor.connect(wallet1.address).emergencyWithdraw(token.address, 100, wallet0.address)).to.be.revertedWith(msg2);
+    
+        await distributor.emergencyWithdraw(token.address, 100, wallet0.address)
+    
+        let tokenBal = (await token.balanceOf(wallet0.address)).toString()
+        await expect(BigNumber.from(tokenBal).toString()).to.be.eq("100")
+      })
+    
       it('fails when T&Cs not approved', async () => {
         const distributor = await deployContract(wallet0, Distributor, [token.address, ZERO_BYTES32], overrides)
         await expect(distributor.connect(wallet0).claim(0, 10, [])).to.be.revertedWith(
@@ -172,10 +205,18 @@ describe('MerkleDistributor', () => {
       it('successful claim', async () => {
         const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
         let termsHash = await distributor.termsHash(wallet0.address);
+        
+        let amt = await token.balanceOf(wallet0.address)
+        //console.log(amt.toString())
+        
         await distributor.connect(wallet0).consentAndAgreeToTerms(0, 100, termsHash, proof0, overrides)
         await expect(distributor.connect(wallet0).claim(0, 100, proof0, overrides))
           .to.emit(distributor, 'Claimed')
-          .withArgs(0, wallet0.address, 100)
+          .withArgs(0, wallet0.address, "100")
+
+        amt = await token.balanceOf(wallet0.address)
+        //console.log(amt.toString())
+
         const proof1 = tree.getProof(1, wallet1.address, BigNumber.from(101))
         termsHash = await distributor.termsHash(wallet1.address);
         await distributor.connect(wallet1).consentAndAgreeToTerms(1, 101, termsHash, proof1, overrides)
@@ -327,6 +368,16 @@ describe('MerkleDistributor', () => {
         )
       })
 
+      it('cannot claim less than proof', async () => {
+        const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
+        let termsHash = await distributor.termsHash(wallet0.address);
+        await distributor.connect(wallet0).consentAndAgreeToTerms(0, 100, termsHash, proof0, overrides)
+
+        await expect(distributor.connect(wallet0).claim(0, 99, proof0, overrides)).to.be.revertedWith(
+          'MerkleDistributor: Invalid proof.'
+        )
+      })
+
       it('gas', async () => {
         const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
         let termsHash = await distributor.termsHash(wallet0.address);
@@ -334,7 +385,7 @@ describe('MerkleDistributor', () => {
 
         const tx = await distributor.connect(wallet0).claim(0, 100, proof0, overrides)
         const receipt = await tx.wait()
-        expect(receipt.gasUsed).to.eq(79004)
+        expect(receipt.gasUsed).to.eq(79026)
       })
     })
     describe('larger tree', () => {
@@ -374,7 +425,7 @@ describe('MerkleDistributor', () => {
         await distributor.connect(wallets[9]).consentAndAgreeToTerms(9, 10, termsHash, proof, overrides)
         const tx = await distributor.connect(wallets[9]).claim(9, 10, proof, overrides)
         const receipt = await tx.wait()
-        expect(receipt.gasUsed).to.eq(81498)
+        expect(receipt.gasUsed).to.eq(81520)
       })
 
       it('gas second down about 15k', async () => {
@@ -398,7 +449,7 @@ describe('MerkleDistributor', () => {
           overrides
         )
         const receipt = await tx.wait()
-        expect(receipt.gasUsed).to.eq(66478)
+        expect(receipt.gasUsed).to.eq(66500)
       })
     })
 
@@ -437,7 +488,7 @@ describe('MerkleDistributor', () => {
 
         const tx = await distributor.connect(wallet0).claim(50000, 100, proof, overrides)
         const receipt = await tx.wait()
-        expect(receipt.gasUsed).to.eq(92188)
+        expect(receipt.gasUsed).to.eq(92210)
       })
       it('gas deeper node', async () => {
         const proof = tree.getProof(90000, wallet0.address, BigNumber.from(100))
@@ -446,7 +497,7 @@ describe('MerkleDistributor', () => {
 
         const tx = await distributor.connect(wallet0).claim(90000, 100, proof, overrides)
         const receipt = await tx.wait()
-        expect(receipt.gasUsed).to.eq(92124)
+        expect(receipt.gasUsed).to.eq(92146)
       })
       it('gas average random distribution', async () => {
         let total: BigNumber = BigNumber.from(0)
@@ -462,7 +513,7 @@ describe('MerkleDistributor', () => {
           count++
         }
         const average = total.div(count)
-        expect(average).to.eq(77613)
+        expect(average).to.eq(77635)
       })
       // this is what we gas golfed by packing the bitmap
       it('gas average first 25', async () => {
@@ -479,7 +530,7 @@ describe('MerkleDistributor', () => {
           count++
         }
         const average = total.div(count)
-        expect(average).to.eq(63362)
+        expect(average).to.eq(63384)
       })
 
       it('no double claims in random distribution', async () => {

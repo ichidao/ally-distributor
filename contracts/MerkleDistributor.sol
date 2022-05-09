@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.6.11;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/cryptography/MerkleProof.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "./interfaces/IMerkleDistributor.sol";
 
-contract MerkleDistributor is IMerkleDistributor {
+contract MerkleDistributor is IMerkleDistributor, Ownable {
+
+    using SafeERC20 for IERC20;
+
     address public immutable override token;
     bytes32 public immutable override merkleRoot;
 
@@ -52,6 +56,12 @@ contract MerkleDistributor is IMerkleDistributor {
         uint256 approvedWordIndex = index / 256;
         uint256 approvedBitIndex = index % 256;
         approvedBitMap[approvedWordIndex] = approvedBitMap[approvedWordIndex] | (1 << approvedBitIndex);
+    }
+
+    function emergencyWithdraw(IERC20 _token, uint256 amount, address to) external override onlyOwner {
+        require(to != address(0), "MerkleDistributor: to cannot be the 0x0 address");
+        _token.safeTransfer(to, amount);
+        emit EmergencyWithdrawal(_token, amount, to);
     }
 
     function consentAndAgreeToTerms(uint256 index, uint256 amount, bytes32 terms, bytes32[] calldata merkleProof) external override {
