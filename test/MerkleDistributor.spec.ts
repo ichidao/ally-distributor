@@ -75,6 +75,9 @@ describe('MerkleDistributor', () => {
         { account: wallet1.address, amount: BigNumber.from(101) },
       ])
       const distributor = await deployContract(wallet0, Distributor, [token.address, tree.getHexRoot()], overrides)
+      const terms = await distributor.termsAndConditions();
+      //console.log(terms)
+
       const proof0 = tree.getProof(0, wallet0.address, BigNumber.from(100))
       const termsHash = await distributor.termsHash(wallet0.address);
       await expect(distributor.connect(wallet0).consentAndAgreeToTerms(1, BigNumber.from(100), termsHash, proof0)).to.be.revertedWith(
